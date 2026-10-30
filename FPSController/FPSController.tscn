@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://cd8fusui816i5"]
+
+[ext_resource type="Script" uid="uid://j8f21u4au6hu" path="res://FPSController/FPSController.gd" id="1_2j53v"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_6n8ij"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_6n8ij"]
+
+[node name="CharacterBody3D" type="CharacterBody3D" unique_id=256579894]
+script = ExtResource("1_2j53v")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1218728361]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CapsuleShape3D_6n8ij")
+debug_fill = false
+
+[node name="WorldModel" type="Node3D" parent="." unique_id=58452161]
+unique_name_in_owner = true
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WorldModel" unique_id=834820148]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("CapsuleMesh_6n8ij")
+
+[node name="Head" type="Node3D" parent="." unique_id=1133687986]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.79, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head" unique_id=1284150823]
+unique_name_in_owner = true
+cull_mask = 1048573

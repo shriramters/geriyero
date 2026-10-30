@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://cdagcjkdgeurg"]
+
+[ext_resource type="PackedScene" uid="uid://cd8fusui816i5" path="res://FPSController/FPSController.tscn" id="1_eb2wh"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_eb2wh"]
+sky_top_color = Color(0.01590548, 0.4597419, 0.7815275, 1)
+sky_horizon_color = Color(0.6117647, 0.7764706, 0.95686275, 1)
+ground_bottom_color = Color(0.17085165, 0.16632515, 0.22876683, 1)
+ground_horizon_color = Color(0.5136517, 0.62347925, 0.71953607, 1)
+energy_multiplier = 1.25
+
+[sub_resource type="Sky" id="Sky_j1pmf"]
+sky_material = SubResource("ProceduralSkyMaterial_eb2wh")
+
+[sub_resource type="Environment" id="Environment_t6etu"]
+background_mode = 2
+sky = SubResource("Sky_j1pmf")
+glow_enabled = true
+
+[sub_resource type="Gradient" id="Gradient_eb2wh"]
+colors = PackedColorArray(0.1764706, 0.3529412, 0.15294118, 1, 0.40784314, 0.62352943, 0.21960784, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_j1pmf"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_eb2wh"]
+noise = SubResource("FastNoiseLite_j1pmf")
+color_ramp = SubResource("Gradient_eb2wh")
+seamless = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6n8ij"]
+albedo_texture = SubResource("NoiseTexture2D_eb2wh")
+
+[node name="Sample" type="Node3D" unique_id=1546403752]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=572805878]
+environment = SubResource("Environment_t6etu")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1798163586]
+transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
+light_color = Color(0.97727543, 0.969912, 0.9373705, 1)
+shadow_enabled = true
+
+[node name="CharacterBody3D" parent="." unique_id=256579894 instance=ExtResource("1_eb2wh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08064401, 1.1920929e-07, -0.047348738)
+
+[node name="ground" type="CSGBox3D" parent="." unique_id=437303102]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+use_collision = true
+size = Vector3(50, 0.2, 50)
+material = SubResource("StandardMaterial3D_6n8ij")
