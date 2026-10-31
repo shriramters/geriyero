@@ -30,6 +30,13 @@ seamless = true
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6n8ij"]
 albedo_texture = SubResource("NoiseTexture2D_eb2wh")
 
+[sub_resource type="Curve3D" id="Curve3D_eb2wh"]
+_data = {
+"points": PackedVector3Array(5.7183206e-07, 102.505775, -56.897602, -5.7183206e-07, -102.505775, 56.897602, -0.02108097, -0.025252342, 0.0622406, 0, -2.3442383, -106.51606, 0, 2.3442383, 106.51606, -6.4898806, -102.38452, 202.30225),
+"tilts": PackedFloat32Array(0, 0)
+}
+point_count = 2
+
 [node name="Sample" type="Node3D" unique_id=1546403752]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=572805878]
@@ -48,3 +55,22 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 use_collision = true
 size = Vector3(50, 0.2, 50)
 material = SubResource("StandardMaterial3D_6n8ij")
+
+[node name="Path3D" type="Path3D" parent="." unique_id=1378125023]
+transform = Transform3D(10, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 24.312466)
+curve = SubResource("Curve3D_eb2wh")
+
+[node name="CSGPolygon3D" type="CSGPolygon3D" parent="Path3D" unique_id=1362332544]
+use_collision = true
+polygon = PackedVector2Array(0, 0, 0.5, 1, 1, 0)
+mode = 2
+path_node = NodePath("..")
+path_interval_type = 0
+path_interval = 1.0
+path_simplify_angle = 0.0
+path_rotation = 2
+path_rotation_accurate = false
+path_local = true
+path_continuous_u = true
+path_u_distance = 1.0
+path_joined = false

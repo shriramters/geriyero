@@ -7,12 +7,22 @@ extends CharacterBody3D
 @export var look_sensitivity: float = 0.006
 @export var jump_velocity:= 6.0
 @export var auto_bhop := true
-@export var walk_speed := 4.0
-@export var sprint_speed := 8.5
 
 const HEADBOB_MOVE_AMOUNT = 0.06
 const HEADBOB_FREQUENCY = 2.4
 var headbob_time := 0.0
+
+# Air movement settings
+@export var air_cap := 0.85
+@export var air_accel := 800.0
+@export var air_move_speed := 500.0
+
+# Ground movement settings
+@export var walk_speed := 4.0
+@export var sprint_speed := 8.5
+@export var ground_accel := 14.0
+@export var ground_decel := 10
+@export var ground_friction := 6.0
 
 var wish_dir := Vector3.ZERO
 
@@ -44,12 +54,59 @@ func _headbob_effect(delta: float):
 		0
 	)
 
+func clip_velocity(normal: Vector3, overbounce : float, delta: float) -> void:
+	# for CS Surf
+	var backoff := self.velocity.dot(normal) * overbounce
+	if backoff >= 0: return
+	var change := normal * backoff
+	self.velocity -= change
+	
+	var adjust := self.velocity.dot(normal)
+	if adjust < 0.0:
+		self.velocity -= normal*adjust
+
+func is_surface_too_steep(normal: Vector3) -> bool:
+	var max_slop_ang_dot = Vector3(0,1,0).rotated(Vector3(1.0,0,0), self.floor_max_angle).dot(Vector3(0,1,0))
+	if normal.dot(Vector3(0,1,0)) < max_slop_ang_dot:
+		return true
+	return false
+
 func _handle_air_physics(delta: float) -> void:
 	self.velocity.y -= ProjectSettings.get_setting("physics/3d/default_gravity") * delta
+	
+	# Classic air movement recipe
+	var cur_speed_in_wish_dir = self.velocity.dot(wish_dir)
+	var capped_speed = min((air_move_speed * wish_dir).length(), air_cap)
+	var add_speed_till_cap = capped_speed - cur_speed_in_wish_dir
+	
+	if add_speed_till_cap > 0:
+		var accel_speed = air_accel * air_move_speed * delta
+		accel_speed = min(accel_speed, add_speed_till_cap)
+		self.velocity += accel_speed * wish_dir
+	
+	if is_on_wall():
+		if is_surface_too_steep(get_wall_normal()):
+			self.motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
+		else:
+			self.motion_mode = CharacterBody3D.MOTION_MODE_GROUNDED
+		clip_velocity(get_wall_normal(), 1, delta) # Allows surf
 
 func _handle_ground_physics(delta: float) -> void:
-	self.velocity.x = wish_dir.x * get_move_speed()
-	self.velocity.z = wish_dir.z * get_move_speed()
+	var cur_speed_in_wish_dir = self.velocity.dot(wish_dir)
+	var add_speed_till_cap = get_move_speed() - cur_speed_in_wish_dir
+	if add_speed_till_cap > 0:
+		var accel_speed = ground_accel * delta * get_move_speed()
+		accel_speed = min(accel_speed, add_speed_till_cap)
+		self.velocity += accel_speed * wish_dir
+	
+	# Apply friction
+	var control = max(self.velocity.length(), ground_decel)
+	var drop = control * ground_friction * delta
+	var new_speed = max(self.velocity.length() - drop, 0.0)
+	if self.velocity.length() > 0:
+		new_speed /= self.velocity.length()
+	self.velocity *= new_speed
+	
 	_headbob_effect(delta)
 
 func _physics_process(delta: float) -> void:
