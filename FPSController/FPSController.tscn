@@ -25,6 +25,18 @@ mesh = SubResource("CapsuleMesh_6n8ij")
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.79, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Head" unique_id=1284150823]
+[node name="CameraSmooth" type="Node3D" parent="Head" unique_id=1660292428]
+unique_name_in_owner = true
+
+[node name="Camera3D" type="Camera3D" parent="Head/CameraSmooth" unique_id=1284150823]
 unique_name_in_owner = true
 cull_mask = 1048573
+
+[node name="StairsAheadRayCast3D" type="RayCast3D" parent="." unique_id=1171216218]
+unique_name_in_owner = true
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56339586, -0.8329084)
+target_position = Vector3(0, -0.55, 0)
+
+[node name="StairsBelowRayCast3D" type="RayCast3D" parent="." unique_id=874929218]
+unique_name_in_owner = true
+target_position = Vector3(0, -0.75, 0)

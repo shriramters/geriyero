@@ -21,7 +21,7 @@ var headbob_time := 0.0
 @export var walk_speed := 4.0
 @export var sprint_speed := 8.5
 @export var ground_accel := 14.0
-@export var ground_decel := 10
+@export var ground_decel := 8
 @export var ground_friction := 6.0
 
 var wish_dir := Vector3.ZERO
@@ -29,6 +29,27 @@ var cam_aligned_wish_dir := Vector3.ZERO
 
 var noclip_speed_mult := 3.0
 var noclip := false
+
+# Stairs movement
+const MAX_STEP_HEIGHT = 0.5
+var _snapped_to_stairs_last_frame := false
+var _last_frame_was_on_floor = -INF
+
+# Camera Smoothing
+var _saved_camera_global_pos = null
+func _save_camera_pos_for_smoothing():
+	if _saved_camera_global_pos == null:
+		_saved_camera_global_pos = %CameraSmooth.global_position
+
+func _slide_camera_smooth_back_to_origin(delta: float) -> void:
+	if _saved_camera_global_pos == null: return
+	%CameraSmooth.global_position.y = _saved_camera_global_pos.y
+	%CameraSmooth.position.y = clampf(%CameraSmooth.position.y, -0.7, 0.7)
+	var move_amount = max(self.velocity.length() * delta, walk_speed/2 * delta)
+	%CameraSmooth.position.y = move_toward(%CameraSmooth.position.y, 0.0, move_amount)
+	_saved_camera_global_pos = %CameraSmooth.global_position
+	if %CameraSmooth.position.y == 0:
+		_saved_camera_global_pos = null
 
 func get_move_speed() -> float:
 	return walk_speed if Input.is_action_pressed("walk") else sprint_speed
@@ -75,6 +96,58 @@ func is_surface_too_steep(normal: Vector3) -> bool:
 		return true
 	return false
 
+func _run_body_test_motion(from: Transform3D, motion: Vector3, result = null) -> bool:
+	if not result: result = PhysicsTestMotionParameters3D.new()
+	var params = PhysicsTestMotionParameters3D.new()
+	params.from = from
+	params.motion = motion
+	return PhysicsServer3D.body_test_motion(self.get_rid(), params, result)
+
+func _snap_down_to_stairs_check() -> void:
+	var did_snap := false
+	var floor_below: bool = %StairsBelowRayCast3D.is_colliding() and not is_surface_too_steep(%StairsBelowRayCast3D.get_collision_normal())
+	var was_on_floor_last_frame = Engine.get_physics_frames() - _last_frame_was_on_floor == 1
+	if not is_on_floor() and velocity.y <= 0 and (was_on_floor_last_frame or _snapped_to_stairs_last_frame) and floor_below:
+		var body_test_result = PhysicsTestMotionResult3D.new()
+		if _run_body_test_motion(self.global_transform, Vector3(0, -MAX_STEP_HEIGHT, 0), body_test_result):
+			_save_camera_pos_for_smoothing()
+			var translate_y = body_test_result.get_travel().y
+			self.position.y += translate_y
+			self.velocity.x *= 0.7 # damp speed while descending
+			self.velocity.z *= 0.7 # damp speed while descending
+			apply_floor_snap()
+			did_snap = true
+	_snapped_to_stairs_last_frame = did_snap
+
+# pasted from https://github.com/majikayogames/SimpleFPSController/blob/da3e71e27dd401702cb65a011b017e465ec00fdd/FPSController/FPSController.gd#L271-L297
+func _snap_up_stairs_check(delta) -> bool:
+	if not is_on_floor() and not _snapped_to_stairs_last_frame: return false
+	# Don't snap stairs if trying to jump, also no need to check for stairs ahead if not moving
+	if self.velocity.y > 0 or (self.velocity * Vector3(1,0,1)).length() == 0: return false
+	var expected_move_motion = self.velocity * Vector3(1,0,1) * delta * 0.5 # 0.5 damps the speed while climbing
+	var step_pos_with_clearance = self.global_transform.translated(expected_move_motion + Vector3(0, MAX_STEP_HEIGHT * 2, 0))
+	# Run a body_test_motion slightly above the pos we expect to move to, towards the floor.
+	#  We give some clearance above to ensure there's ample room for the player.
+	#  If it hits a step <= MAX_STEP_HEIGHT, we can teleport the player on top of the step
+	#  along with their intended motion forward.
+	var down_check_result = KinematicCollision3D.new()
+	if (self.test_move(step_pos_with_clearance, Vector3(0,-MAX_STEP_HEIGHT*2,0), down_check_result)
+	and (down_check_result.get_collider().is_class("StaticBody3D") or down_check_result.get_collider().is_class("CSGShape3D"))):
+		var step_height = ((step_pos_with_clearance.origin + down_check_result.get_travel()) - self.global_position).y
+		# Note I put the step_height <= 0.01 in just because I noticed it prevented some physics glitchiness
+		# 0.02 was found with trial and error. Too much and sometimes get stuck on a stair. Too little and can jitter if running into a ceiling.
+		# The normal character controller (both jolt & default) seems to be able to handled steps up of 0.1 anyway
+		if step_height > MAX_STEP_HEIGHT or step_height <= 0.01 or (down_check_result.get_position() - self.global_position).y > MAX_STEP_HEIGHT: return false
+		%StairsAheadRayCast3D.global_position = down_check_result.get_position() + Vector3(0,MAX_STEP_HEIGHT,0) + expected_move_motion.normalized() * 0.1
+		%StairsAheadRayCast3D.force_raycast_update()
+		if %StairsAheadRayCast3D.is_colliding() and not is_surface_too_steep(%StairsAheadRayCast3D.get_collision_normal()):
+			_save_camera_pos_for_smoothing()
+			self.global_position = step_pos_with_clearance.origin + down_check_result.get_travel()
+			apply_floor_snap()
+			_snapped_to_stairs_last_frame = true
+			return true
+	return false
+
 func _handle_noclip(delta: float) -> bool:
 	if Input.is_action_just_pressed("noclip") and OS.has_feature("debug"):
 		noclip = !noclip
@@ -113,14 +186,7 @@ func _handle_air_physics(delta: float) -> void:
 		clip_velocity(get_wall_normal(), 1, delta) # Allows surf
 
 func _handle_ground_physics(delta: float) -> void:
-	var cur_speed_in_wish_dir = self.velocity.dot(wish_dir)
-	var add_speed_till_cap = get_move_speed() - cur_speed_in_wish_dir
-	if add_speed_till_cap > 0:
-		var accel_speed = ground_accel * delta * get_move_speed()
-		accel_speed = min(accel_speed, add_speed_till_cap)
-		self.velocity += accel_speed * wish_dir
-	
-	# Apply friction
+	# Apply friction (has to be first)
 	var control = max(self.velocity.length(), ground_decel)
 	var drop = control * ground_friction * delta
 	var new_speed = max(self.velocity.length() - drop, 0.0)
@@ -128,21 +194,35 @@ func _handle_ground_physics(delta: float) -> void:
 		new_speed /= self.velocity.length()
 	self.velocity *= new_speed
 	
+	var cur_speed_in_wish_dir = self.velocity.dot(wish_dir)
+	var add_speed_till_cap = get_move_speed() - cur_speed_in_wish_dir
+	if add_speed_till_cap > 0:
+		var accel_speed = ground_accel * delta * get_move_speed()
+		accel_speed = min(accel_speed, add_speed_till_cap)
+		self.velocity += accel_speed * wish_dir
+	
 	_headbob_effect(delta)
 
 func _physics_process(delta: float) -> void:
+	if is_on_floor(): _last_frame_was_on_floor = Engine.get_physics_frames()
+	
 	var input_dir = Input.get_vector("left", "right", "up", "down").normalized()
 	wish_dir = self.global_transform.basis * Vector3(input_dir.x, 0., input_dir.y)
 	cam_aligned_wish_dir = %Camera3D.global_transform.basis * Vector3(input_dir.x, 0., input_dir.y)
 	
 	if not _handle_noclip(delta):
-		if is_on_floor():
+		if is_on_floor() or _snapped_to_stairs_last_frame:
 			if Input.is_action_just_pressed("jump") or (auto_bhop and Input.is_action_pressed("jump")):
 				self.velocity.y = jump_velocity
 			_handle_ground_physics(delta)
 		else:
 			_handle_air_physics(delta)
-		move_and_slide()
+		
+		if not _snap_up_stairs_check(delta):
+			move_and_slide()
+			_snap_down_to_stairs_check()
+	
+	_slide_camera_smooth_back_to_origin(delta)
 
 func _process(delta: float) -> void:
 	pass
